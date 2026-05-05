@@ -40,6 +40,17 @@ def login():
     return jsonify(result), 200
 
 
+@auth_bp.post("/refresh")
+def refresh():
+    """Exchange a Supabase refresh_token for new access/refresh tokens."""
+    body = request.get_json(silent=True) or {}
+    refresh_token = body.get("refresh_token") or ""
+    result, error = auth_service.refresh_session(refresh_token=refresh_token)
+    if error:
+        return jsonify({"error": error}), 401
+    return jsonify(result), 200
+
+
 @auth_bp.get("/me")
 @require_auth
 def me():

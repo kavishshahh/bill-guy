@@ -68,6 +68,17 @@ create table if not exists sites (
 create unique index if not exists ux_sites_company_name_ci
 on sites(company_id, lower(name));
 
+create table if not exists buyers (
+    id uuid primary key default gen_random_uuid(),
+    company_id uuid not null references companies(id) on delete cascade,
+    name text not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create unique index if not exists ux_buyers_company_name_ci
+on buyers(company_id, lower(name));
+
 create table if not exists transactions (
     id uuid primary key default gen_random_uuid(),
     company_id uuid not null references companies(id) on delete cascade,
@@ -76,6 +87,7 @@ create table if not exists transactions (
     voucher_no text,
     challan_no text,
     site_id uuid references sites(id) on delete set null,
+    buyer_id uuid references buyers(id) on delete set null,
     item_id uuid not null references items(id) on delete restrict,
     quantity numeric(12,3) not null check (quantity > 0),
     unit text not null default 'MT',
@@ -83,6 +95,7 @@ create table if not exists transactions (
     sale_rate numeric(12,2) not null,
     trip_count integer default 1 check (trip_count > 0),
     notes text,
+    metadata jsonb,
     invoice_status text not null default 'not_invoiced'
         check (invoice_status in ('not_invoiced', 'invoiced')),
     created_at timestamptz not null default now(),
@@ -91,3 +104,7 @@ create table if not exists transactions (
 
 create index if not exists ix_transactions_company_fy_date
 on transactions(company_id, financial_year_id, tx_date);
+
+-- For existing deployments that ran an older bootstrap, add nullable columns safely.
+alter table transactions add column if not exists buyer_id uuid references buyers(id) on delete set null;
+alter table transactions add column if not exists metadata jsonb;

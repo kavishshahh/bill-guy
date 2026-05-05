@@ -1,4 +1,8 @@
-import { getAccessToken } from "./auth";
+import {
+  ensureAccessTokenFresh,
+  getAccessToken,
+  refreshTokensFromServer,
+} from "./auth";
 
 // All requests target relative /api/* paths. The Next.js rewrite in
 // next.config.mjs forwards them to the Flask backend so we sidestep CORS
@@ -36,45 +40,70 @@ function buildUrl(path: string, query?: RequestOptions["query"]): string {
   return url.pathname + (url.search ? url.search : "");
 }
 
+function authHeaders(authenticated: boolean): Record<string, string> {
+  if (!authenticated) return {};
+  const token = getAccessToken();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function parseResponseBody(res: Response): Promise<unknown> {
+  const raw = await res.text();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
   const { method = "GET", body, query, authenticated = true } = options;
 
-  const headers: Record<string, string> = {
+  if (authenticated) {
+    const fresh = await ensureAccessTokenFresh();
+    if (!fresh) {
+      throw new ApiError(401, "Session expired. Please log in again.", null);
+    }
+  }
+
+  const url = buildUrl(path, query);
+  const baseHeaders: Record<string, string> = {
     "Content-Type": "application/json",
+    ...authHeaders(authenticated),
   };
 
-  if (authenticated) {
-    const token = getAccessToken();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+  const runFetch = () =>
+    fetch(url, {
+      method,
+      headers: baseHeaders,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+
+  let res = await runFetch();
+
+  if (authenticated && res.status === 401) {
+    const renewed = await refreshTokensFromServer();
+    if (renewed) {
+      baseHeaders.Authorization = `Bearer ${getAccessToken() ?? ""}`;
+      res = await fetch(url, {
+        method,
+        headers: baseHeaders,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        cache: "no-store",
+      });
     }
   }
 
-  const res = await fetch(buildUrl(path, query), {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
-
-  // Best-effort body parse; surface raw text on parse failure so the caller
-  // gets something useful rather than "unexpected end of JSON input".
-  let parsed: unknown = null;
-  const raw = await res.text();
-  if (raw) {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = raw;
-    }
-  }
+  const parsed = await parseResponseBody(res);
 
   if (!res.ok) {
     const message =
-      (parsed && typeof parsed === "object" && "error" in parsed
+      (parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
         ? String((parsed as { error: unknown }).error)
         : null) || `Request failed with status ${res.status}`;
     throw new ApiError(res.status, message, parsed);

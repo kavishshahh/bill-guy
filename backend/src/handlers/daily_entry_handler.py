@@ -23,6 +23,7 @@ def create_daily_entry():
         "voucher_no": body.get("voucher_no"),
         "challan_no": body.get("challan_no"),
         "site_id": body.get("site_id"),
+        "buyer_id": body.get("buyer_id"),
         "item_id": body["item_id"],
         "quantity": body["quantity"],
         "unit": body.get("unit", "MT"),
@@ -30,6 +31,9 @@ def create_daily_entry():
         "sale_rate": body["sale_rate"],
         "trip_count": body.get("trip_count", 1),
         "notes": body.get("notes"),
+        "metadata": body.get("metadata"),
+        "create_invoice": body.get("create_invoice"),
+        "invoice_status": body.get("invoice_status"),
     }
 
     created, error = daily_entry_service.create_entry(g.current_user_id, payload)

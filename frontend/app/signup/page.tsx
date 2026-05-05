@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ApiError, apiFetch } from "@/lib/api";
-import { saveSession, type SupabaseSession } from "@/lib/auth";
+import { normalizeGoTruePayload, saveSession, type SupabaseSession } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function SignupPage() {
 
       // Supabase may require email confirmation; in that case access_token is
       // absent. We surface that to the user instead of silently routing them.
-      if (session.access_token) {
+      if (normalizeGoTruePayload(session).access_token) {
         saveSession(session);
         router.push("/dashboard");
       } else {

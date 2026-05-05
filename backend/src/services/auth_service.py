@@ -25,7 +25,6 @@ class AuthService:
             json=payload,
             timeout=30,
         )
-        print("Supabase response:", response.status_code, response.text, response.json())
         if response.status_code >= 400:
             return None, response.json().get("msg", "Supabase signup failed")
 
@@ -46,7 +45,6 @@ class AuthService:
             json={"email": email, "password": password},
             timeout=30,
         )
-        print("Supabase response:", response.status_code, response.text, response.json())
         if response.status_code >= 400:
             return None, response.json().get("msg", "Invalid email or password")
 
@@ -56,6 +54,35 @@ class AuthService:
             self.user_repo.upsert_user(
                 user_id=user_data["id"],
                 email=user_data.get("email") or email,
+                full_name=(user_data.get("user_metadata") or {}).get("full_name", ""),
+            )
+        return data, None
+
+    def refresh_session(self, refresh_token: str):
+        if not refresh_token:
+            return None, "refresh_token is required"
+
+        response = requests.post(
+            f"{self.base_auth_url}/token?grant_type=refresh_token",
+            headers=self.headers,
+            json={"refresh_token": refresh_token},
+            timeout=30,
+        )
+
+        if response.status_code >= 400:
+            try:
+                payload = response.json()
+                msg = payload.get("msg") or payload.get("error_description") or "Refresh failed"
+            except ValueError:
+                msg = response.text or "Refresh failed"
+            return None, msg
+
+        data = response.json()
+        user_data = data.get("user")
+        if user_data:
+            self.user_repo.upsert_user(
+                user_id=user_data["id"],
+                email=user_data.get("email") or "",
                 full_name=(user_data.get("user_metadata") or {}).get("full_name", ""),
             )
         return data, None
