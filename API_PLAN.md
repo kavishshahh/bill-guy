@@ -1,6 +1,6 @@
 # API Plan (FastAPI)
 
-This document defines the initial endpoint plan for MVP implementation.
+This document defines the initial endpoint plan for MVP implementation,
 
 ## 1) Conventions
 
